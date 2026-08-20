@@ -24,9 +24,7 @@ $users = $pdo->query("SELECT id, username, role, created_at FROM users ORDER BY 
   <a href="/inventory_system/pages/register_user.php" class="btn btn-primary" style="font-size: 15px;">＋ Register New User</a>
 </div>
 
-<div style="margin-bottom:0.75rem;">
-  <input type="text" data-filter-table="usersTable" placeholder="Search users…" style="max-width:320px;">
-</div>
+
 
 <div class="card">
   <div class="card-header"><h3>All Users (<?= count($users) ?>)</h3></div>

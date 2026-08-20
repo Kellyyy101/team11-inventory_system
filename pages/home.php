@@ -33,7 +33,7 @@
     .home-body {
       max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem;
       display: grid; grid-template-columns: 1fr 380px; gap: 2.5rem;
-      align-items: start;
+      align-items: center;
     }
 
     /* ── Left: About + Features ── */
