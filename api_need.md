@@ -1,5 +1,7 @@
 Kelly Wambugu – 220001
 Victor Amukoye – 220621
+Linet Weru - 222170
+Jayden Mwendo - 220774
 
 
 LiteStock API Needs Statements
