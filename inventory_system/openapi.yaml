@@ -1,0 +1,303 @@
+openapi: 3.0.0
+info:
+  title: LiteStock User API
+  version: 1.0.0
+  description: >
+    API provided by LiteStock for the Strathmore University
+    Lost & Found platform.
+servers:
+  - url: https://api.litestock.example.com
+paths:
+  /users:
+    get:
+      summary: Search for users
+      parameters:
+        - name: search
+          in: query
+          required: true
+          description: Name or email used to search for users
+          schema:
+            type: string
+            minLength: 2
+            example: "John Kamau"
+      responses:
+        '200':
+          description: Matching users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - users
+                  - count
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  count:
+                    type: integer
+                    example: 1
+        '400':
+          description: Invalid search request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - role
+              properties:
+                name:
+                  type: string
+                  example: "Mary Wanjiku"
+                email:
+                  type: string
+                  format: email
+                  example: "mary.wanjiku@strathmore.edu"
+                role:
+                  type: string
+                  enum:
+                    - student
+                    - security
+                  example: "student"
+                phone:
+                  type: string
+                  nullable: true
+                  example: "+254711234567"
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - name
+                  - email
+                  - role
+                properties:
+                  userId:
+                    type: integer
+                    example: 1032
+                  name:
+                    type: string
+                    example: "Mary Wanjiku"
+                  email:
+                    type: string
+                    format: email
+                    example: "mary.wanjiku@strathmore.edu"
+                  role:
+                    type: string
+                    enum:
+                      - student
+                      - security
+                    example: "student"
+        '400':
+          description: Invalid user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A user with the supplied email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}:
+    get:
+      summary: Retrieve user details
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Unique identifier of the user
+          schema:
+            type: integer
+            example: 1025
+      responses:
+        '200':
+          description: User details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/verification:
+    get:
+      summary: Retrieve user verification information
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Unique identifier of the user
+          schema:
+            type: integer
+            example: 1025
+      responses:
+        '200':
+          description: User verification information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - verified
+                  - verificationStatus
+                properties:
+                  userId:
+                    type: integer
+                    example: 1025
+                  verified:
+                    type: boolean
+                    example: true
+                  verificationStatus:
+                    type: string
+                    enum:
+                      - verified
+                      - unverified
+                    example: "verified"
+        '404':
+          description: User was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/role:
+    get:
+      summary: Retrieve a user's role
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Unique identifier of the user
+          schema:
+            type: integer
+            example: 1025
+      responses:
+        '200':
+          description: User role retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - role
+                properties:
+                  userId:
+                    type: integer
+                    example: 1025
+                  role:
+                    type: string
+                    enum:
+                      - student
+                      - security
+                      - administrator
+                    example: "student"
+        '404':
+          description: User was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/contact:
+    get:
+      summary: Retrieve user contact information
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Unique identifier of the user
+          schema:
+            type: integer
+            example: 1025
+      responses:
+        '200':
+          description: User contact information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - email
+                properties:
+                  userId:
+                    type: integer
+                    example: 1025
+                  email:
+                    type: string
+                    format: email
+                    example: "john.kamau@strathmore.edu"
+                  phone:
+                    type: string
+                    nullable: true
+                    example: "+254712345678"
+        '404':
+          description: User was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - userId
+        - name
+        - email
+        - role
+      properties:
+        userId:
+          type: integer
+          example: 1025
+        name:
+          type: string
+          example: "John Kamau"
+        email:
+          type: string
+          format: email
+          example: "john.kamau@strathmore.edu"
+        role:
+          type: string
+          enum:
+            - student
+            - security
+            - administrator
+          example: "student"
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "USER_NOT_FOUND"
+        message:
+          type: string
+          example: "No user exists with the specified userId."
