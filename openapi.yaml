@@ -1,47 +1,51 @@
 openapi: 3.0.0
 info:
-  title: LiteStock System - Found Items Integration API
+  title: LiteStock User API
   version: 1.0.0
-  description: API provided by Team 10 and consumed by Team 11 (LiteStock) to query found items, inspect locations and images, and log newly found items.
+  description: >
+    API provided by LiteStock for the Strathmore University
+    Lost & Found platform.
+servers:
+  - url: https://api.litestock.example.com
 paths:
-  /found-items:
+  /users:
     get:
-      summary: Retrieve a filtered or full list of found items
-      description: Returns a list of found items. Supports optional search and category filters. Returns an empty array `[]` when no items match.
+      summary: Search for users
       parameters:
         - name: search
           in: query
-          required: false
-          description: Search term matching title or description.
+          required: true
+          description: Name or email used to search for users
           schema:
             type: string
-            example: "water bottle"
-        - name: category
-          in: query
-          required: false
-          description: Category filter for found items.
-          schema:
-            type: string
-            example: "electronics"
+            minLength: 2
+            example: "John Kamau"
       responses:
         '200':
-          description: List of found items retrieved successfully.
+          description: Matching users retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FoundItem'
+                type: object
+                required:
+                  - users
+                  - count
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  count:
+                    type: integer
+                    example: 1
         '400':
-          description: Invalid request parameter format.
+          description: Invalid search request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
+                $ref: '#/components/schemas/Error'
     post:
-      summary: Record a newly found item
-      description: Log a new found item into the system including details, location, and optional image links.
+      summary: Create a new user
       requestBody:
         required: true
         content:
@@ -49,210 +53,251 @@ paths:
             schema:
               type: object
               required:
-                - title
-                - category
-                - location
-                - dateFound
+                - name
+                - email
+                - role
               properties:
-                title:
+                name:
                   type: string
-                  example: "Hydro Flask Water Bottle"
-                category:
+                  example: "Mary Wanjiku"
+                email:
                   type: string
-                  example: "personal items"
-                description:
+                  format: email
+                  example: "mary.wanjiku@strathmore.edu"
+                role:
                   type: string
-                  example: "Blue 32oz Hydro Flask with a hydro sticker"
-                location:
+                  enum:
+                    - student
+                    - security
+                  example: "student"
+                phone:
                   type: string
-                  example: "Library 2nd Floor Study Desk"
-                dateFound:
-                  type: string
-                  format: date-time
-                  example: "2026-09-01T14:30:00Z"
-                images:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                  example:
-                    - "https://storage.university.edu/found/img1029.jpg"
+                  nullable: true
+                  example: "+254711234567"
       responses:
         '201':
-          description: Found item created successfully.
+          description: User created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FoundItem'
+                type: object
+                required:
+                  - userId
+                  - name
+                  - email
+                  - role
+                properties:
+                  userId:
+                    type: integer
+                    example: 1032
+                  name:
+                    type: string
+                    example: "Mary Wanjiku"
+                  email:
+                    type: string
+                    format: email
+                    example: "mary.wanjiku@strathmore.edu"
+                  role:
+                    type: string
+                    enum:
+                      - student
+                      - security
+                    example: "student"
         '400':
-          description: Missing or invalid required payload fields.
+          description: Invalid user information
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A user with the supplied email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  /found-items/{id}:
+  /users/{userId}:
     get:
-      summary: Retrieve specific found item details
-      description: Returns detailed metadata for a single item by its ID.
+      summary: Retrieve user details
       parameters:
-        - name: id
+        - name: userId
           in: path
           required: true
-          description: Unique integer ID of the found item.
+          description: Unique identifier of the user
           schema:
             type: integer
-            example: 101
+            example: 1025
       responses:
         '200':
-          description: Found item details returned successfully.
+          description: User details retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FoundItem'
+                $ref: '#/components/schemas/User'
         '404':
-          description: Found item not found.
+          description: User was not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Error'
 
-  /found-items/{id}/images:
+  /users/{userId}/verification:
     get:
-      summary: Retrieve images associated with a specific found item
-      description: Returns image URLs linked to the requested found item.
+      summary: Retrieve user verification information
       parameters:
-        - name: id
+        - name: userId
           in: path
           required: true
-          description: Unique integer ID of the found item.
+          description: Unique identifier of the user
           schema:
             type: integer
-            example: 101
+            example: 1025
       responses:
         '200':
-          description: List of image URLs retrieved successfully.
+          description: User verification information retrieved successfully
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - itemId
-                  - images
+                  - userId
+                  - verified
+                  - verificationStatus
                 properties:
-                  itemId:
+                  userId:
                     type: integer
-                    example: 101
-                  images:
-                    type: array
-                    items:
-                      type: string
-                      format: uri
-                    example:
-                      - "https://storage.university.edu/found/img1029.jpg"
-                      - "https://storage.university.edu/found/img1030.jpg"
+                    example: 1025
+                  verified:
+                    type: boolean
+                    example: true
+                  verificationStatus:
+                    type: string
+                    enum:
+                      - verified
+                      - unverified
+                    example: "verified"
         '404':
-          description: Found item or images not found.
+          description: User was not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Error'
 
-  /found-items/{id}/location:
+  /users/{userId}/role:
     get:
-      summary: Retrieve physical retrieval location for a specific item
-      description: Returns detailed physical location and security office details to retrieve the item.
+      summary: Retrieve a user's role
       parameters:
-        - name: id
+        - name: userId
           in: path
           required: true
-          description: Unique integer ID of the found item.
+          description: Unique identifier of the user
           schema:
             type: integer
-            example: 101
+            example: 1025
       responses:
         '200':
-          description: Location info retrieved successfully.
+          description: User role retrieved successfully
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - itemId
-                  - storageLocation
-                  - pickupOffice
+                  - userId
+                  - role
                 properties:
-                  itemId:
+                  userId:
                     type: integer
-                    example: 101
-                  storageLocation:
+                    example: 1025
+                  role:
                     type: string
-                    example: "Locker B-12, Main Campus Security Center"
-                  pickupOffice:
-                    type: string
-                    example: "Central Security Desk - Hall A"
-                  pickupHours:
-                    type: string
-                    example: "Mon-Fri 08:00-17:00"
+                    enum:
+                      - student
+                      - security
+                      - administrator
+                    example: "student"
         '404':
-          description: Found item or location record not found.
+          description: User was not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/contact:
+    get:
+      summary: Retrieve user contact information
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Unique identifier of the user
+          schema:
+            type: integer
+            example: 1025
+      responses:
+        '200':
+          description: User contact information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - userId
+                  - email
+                properties:
+                  userId:
+                    type: integer
+                    example: 1025
+                  email:
+                    type: string
+                    format: email
+                    example: "john.kamau@strathmore.edu"
+                  phone:
+                    type: string
+                    nullable: true
+                    example: "+254712345678"
+        '404':
+          description: User was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
-    FoundItem:
+    User:
       type: object
       required:
-        - id
-        - title
-        - category
-        - location
-        - dateFound
-        - status
+        - userId
+        - name
+        - email
+        - role
       properties:
-        id:
+        userId:
           type: integer
-          example: 101
-        title:
+          example: 1025
+        name:
           type: string
-          example: "Hydro Flask Water Bottle"
-        category:
+          example: "John Kamau"
+        email:
           type: string
-          example: "personal items"
-        description:
+          format: email
+          example: "john.kamau@strathmore.edu"
+        role:
           type: string
-          example: "Blue 32oz Hydro Flask with a hydro sticker"
-        location:
-          type: string
-          example: "Library 2nd Floor Study Desk"
-        dateFound:
-          type: string
-          format: date-time
-          example: "2026-09-01T14:30:00Z"
-        status:
-          type: string
-          enum: [unclaimed, under_review, claimed, closed]
-          example: "unclaimed"
-        images:
-          type: array
-          items:
-            type: string
-            format: uri
-          example:
-            - "https://storage.university.edu/found/img1029.jpg"
-
-    ErrorResponse:
+          enum:
+            - student
+            - security
+            - administrator
+          example: "student"
+    Error:
       type: object
       required:
-        - statusCode
+        - error
         - message
       properties:
-        statusCode:
-          type: integer
-          example: 404
+        error:
+          type: string
+          example: "USER_NOT_FOUND"
         message:
           type: string
-          example: "Resource not found."
+          example: "No user exists with the specified userId."
