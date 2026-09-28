@@ -8,11 +8,15 @@ Linet Weru – 222170
 
 Github link: https://github.com/Kellyyy101/-team-11--inventory_system
 
-| Method | Path | Purpose | Maps to Need |
-|---|---|---|---|
-| GET | /found-items | Return a list of found items so users can search for items they previously reported as lost. | LiteStock needs to read a list of found items in order to allow users to search for items that they have previously reported as lost. |
-| GET | /found-items?search={term} | Return a filtered list of found items matching the user's search term. | LiteStock needs to read a list of found items in order to allow users to search for items that they have previously reported as lost. |
-| GET | /found-items/{id} | Return the details of a specific found item so users can compare its identifying information with the item they lost. | LiteStock needs to read the details of a found item in order to allow users to compare the item's identifying information with the item they lost. |
-| GET | /found-items/{id}/images | Return the images associated with a specific found item so users can visually confirm whether it matches the item they lost. | LiteStock needs to read images of found items in order to allow users to visually confirm that a found item matches the item they lost before travelling to retrieve it. |
-| GET | /found-items/{id}/location | Return the retrieval location of a specific found item so users know where to go to collect it. | LiteStock needs to read the retrieval location of a found item in order to allow users to know where to go to collect their item once they have identified it. |
-| POST | /found-items | Record a recently found item, including its identifying details, image and retrieval location. | A found item can be recorded together with its details, images, and retrieval location. |
+| Method | Path | Purpose| Maps to Need |
+| ----- | ----- | ----- | -----|
+
+| GET    | `/api/providers/{provider_id}`  | Return the details of a specific registered provider so QuickFundi can display the provider's basic information to clients.| QuickFundi needs to retrieve registered provider details from LiteStock in order to display basic information about service providers to clients.|
+
+| GET    | `/api/products?provider_id={provider_id}`  | Return a list of products or services associated with a specific provider so QuickFundi can show clients what the provider offers.| QuickFundi needs to retrieve product or service information from LiteStock in order to help clients understand the services offered by a registered provider. |
+
+| GET    | `/api/sales?provider_id={provider_id}`     | Return sales information associated with a specific provider so QuickFundi can review the provider's recorded sales and activity.  | QuickFundi needs to retrieve sales information from LiteStock in order to help determine the provider's activity and service history.|
+
+| GET    | `/api/inventory?provider_id={provider_id}` | Return inventory information for a specific provider so QuickFundi can determine whether the provider has relevant products or materials available. | QuickFundi needs to retrieve inventory information from LiteStock in order to determine whether a provider has the necessary products or materials available for a requested service. |
+
+| POST   | `/api/providers` | Record a new provider in LiteStock when the provider is not already registered in the system.| QuickFundi needs to submit a service provider record to LiteStock in order to register a provider who is not yet present in the LiteStock system. |
