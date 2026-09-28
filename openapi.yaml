@@ -6,263 +6,201 @@ Linet Weru – 222170
 
 openapi: 3.0.0
 info:
-  title: LiteStock User API
+  title: LiteStock API for QuickFundi
   version: 1.0.0
-  description: >
-    API provided by LiteStock for the Strathmore University
-    Lost & Found platform.
+  description: API consumed by QuickFundi to retrieve provider, service, sales and inventory information and register providers.
+
 servers:
-  - url: https://api.litestock.example.com
+  - url: http://localhost:3000
+
 paths:
-  /users:
+  /api/providers/{provider_id}:
     get:
-      summary: Search for users
+      summary: Get provider details
       parameters:
-        - name: search
-          in: query
+        - name: provider_id
+          in: path
           required: true
-          description: Name or email used to search for users
+          description: Unique provider ID
           schema:
-            type: string
-            minLength: 2
-            example: "John Kamau"
+            type: integer
+            minimum: 1
+            example: 15
       responses:
         '200':
-          description: Matching users retrieved successfully
+          description: Provider found
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - users
-                  - count
-                properties:
-                  users:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/User'
-                  count:
-                    type: integer
-                    example: 1
+                $ref: '#/components/schemas/Provider'
+              example:
+                provider_id: 15
+                name: John Mwangi
+                location: Nairobi
+                phone: "0712345678"
+                description: Plumbing and general maintenance services
+                status: active
         '400':
-          description: Invalid search request
+          description: Invalid provider ID
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/products:
+    get:
+      summary: Get products or services for a provider
+      parameters:
+        - name: provider_id
+          in: query
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider products/services
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductsResponse'
+              example:
+                provider_id: 15
+                products:
+                  - product_id: 101
+                    name: Pipe Repair
+                    description: Repair of leaking or damaged pipes
+                    price: 1500
+        '400':
+          description: Invalid provider_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/sales:
+    get:
+      summary: Get sales information for a provider
+      parameters:
+        - name: provider_id
+          in: query
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider sales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesResponse'
+              example:
+                provider_id: 15
+                sales:
+                  - sale_id: 501
+                    date: "2026-09-25"
+                    service: Pipe Repair
+                    quantity: 1
+                    amount: 1500
+        '400':
+          description: Invalid provider_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/inventory:
+    get:
+      summary: Get inventory for a provider
+      parameters:
+        - name: provider_id
+          in: query
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryResponse'
+              example:
+                provider_id: 15
+                inventory:
+                  - product_id: 201
+                    name: PVC Pipe
+                    quantity: 25
+                    unit: pieces
+                    status: in_stock
+        '400':
+          description: Invalid provider_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/providers:
     post:
-      summary: Create a new user
+      summary: Register a new provider
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - name
-                - email
-                - role
-              properties:
-                name:
-                  type: string
-                  example: "Mary Wanjiku"
-                email:
-                  type: string
-                  format: email
-                  example: "mary.wanjiku@strathmore.edu"
-                role:
-                  type: string
-                  enum:
-                    - student
-                    - security
-                  example: "student"
-                phone:
-                  type: string
-                  nullable: true
-                  example: "+254711234567"
+              $ref: '#/components/schemas/CreateProviderRequest'
+            example:
+              name: John Mwangi
+              location: Nairobi
+              phone: "0712345678"
+              description: Plumbing and general maintenance services
       responses:
         '201':
-          description: User created successfully
+          description: Provider created
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - userId
-                  - name
-                  - email
-                  - role
-                properties:
-                  userId:
-                    type: integer
-                    example: 1032
-                  name:
-                    type: string
-                    example: "Mary Wanjiku"
-                  email:
-                    type: string
-                    format: email
-                    example: "mary.wanjiku@strathmore.edu"
-                  role:
-                    type: string
-                    enum:
-                      - student
-                      - security
-                    example: "student"
+                $ref: '#/components/schemas/CreateProviderResponse'
         '400':
-          description: Invalid user information
+          description: Validation error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '409':
-          description: A user with the supplied email already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /users/{userId}:
-    get:
-      summary: Retrieve user details
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          description: Unique identifier of the user
-          schema:
-            type: integer
-            example: 1025
-      responses:
-        '200':
-          description: User details retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '404':
-          description: User was not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /users/{userId}/verification:
-    get:
-      summary: Retrieve user verification information
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          description: Unique identifier of the user
-          schema:
-            type: integer
-            example: 1025
-      responses:
-        '200':
-          description: User verification information retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - userId
-                  - verified
-                  - verificationStatus
-                properties:
-                  userId:
-                    type: integer
-                    example: 1025
-                  verified:
-                    type: boolean
-                    example: true
-                  verificationStatus:
-                    type: string
-                    enum:
-                      - verified
-                      - unverified
-                    example: "verified"
-        '404':
-          description: User was not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /users/{userId}/role:
-    get:
-      summary: Retrieve a user's role
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          description: Unique identifier of the user
-          schema:
-            type: integer
-            example: 1025
-      responses:
-        '200':
-          description: User role retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - userId
-                  - role
-                properties:
-                  userId:
-                    type: integer
-                    example: 1025
-                  role:
-                    type: string
-                    enum:
-                      - student
-                      - security
-                      - administrator
-                    example: "student"
-        '404':
-          description: User was not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /users/{userId}/contact:
-    get:
-      summary: Retrieve user contact information
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          description: Unique identifier of the user
-          schema:
-            type: integer
-            example: 1025
-      responses:
-        '200':
-          description: User contact information retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - userId
-                  - email
-                properties:
-                  userId:
-                    type: integer
-                    example: 1025
-                  email:
-                    type: string
-                    format: email
-                    example: "john.kamau@strathmore.edu"
-                  phone:
-                    type: string
-                    nullable: true
-                    example: "+254712345678"
-        '404':
-          description: User was not found
+        '500':
+          description: Server error
           content:
             application/json:
               schema:
@@ -270,40 +208,191 @@ paths:
 
 components:
   schemas:
-    User:
+    Provider:
       type: object
       required:
-        - userId
+        - provider_id
         - name
-        - email
-        - role
+        - location
+        - phone
+        - description
+        - status
       properties:
-        userId:
+        provider_id:
           type: integer
-          example: 1025
+          example: 15
         name:
           type: string
-          example: "John Kamau"
-        email:
+          example: John Mwangi
+        location:
           type: string
-          format: email
-          example: "john.kamau@strathmore.edu"
-        role:
+          example: Nairobi
+        phone:
           type: string
-          enum:
-            - student
-            - security
-            - administrator
-          example: "student"
+          example: "0712345678"
+        description:
+          type: string
+          example: Plumbing and general maintenance services
+        status:
+          type: string
+          enum: [active, inactive]
+          example: active
+
+    CreateProviderRequest:
+      type: object
+      required:
+        - name
+        - location
+        - phone
+        - description
+      properties:
+        name:
+          type: string
+          example: John Mwangi
+        location:
+          type: string
+          example: Nairobi
+        phone:
+          type: string
+          example: "0712345678"
+        description:
+          type: string
+          example: Plumbing and general maintenance services
+
+    CreateProviderResponse:
+      type: object
+      required:
+        - message
+        - provider
+      properties:
+        message:
+          type: string
+          example: Provider registered successfully
+        provider:
+          $ref: '#/components/schemas/Provider'
+
+    Product:
+      type: object
+      required:
+        - product_id
+        - name
+        - description
+        - price
+      properties:
+        product_id:
+          type: integer
+          example: 101
+        name:
+          type: string
+          example: Pipe Repair
+        description:
+          type: string
+          example: Repair of leaking or damaged pipes
+        price:
+          type: number
+          format: float
+          example: 1500
+
+    ProductsResponse:
+      type: object
+      required:
+        - provider_id
+        - products
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+
+    Sale:
+      type: object
+      required:
+        - sale_id
+        - date
+        - service
+        - quantity
+        - amount
+      properties:
+        sale_id:
+          type: integer
+          example: 501
+        date:
+          type: string
+          format: date
+          example: "2026-09-25"
+        service:
+          type: string
+          example: Pipe Repair
+        quantity:
+          type: integer
+          example: 1
+        amount:
+          type: number
+          format: float
+          example: 1500
+
+    SalesResponse:
+      type: object
+      required:
+        - provider_id
+        - sales
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        sales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sale'
+
+    InventoryItem:
+      type: object
+      required:
+        - product_id
+        - name
+        - quantity
+        - unit
+        - status
+      properties:
+        product_id:
+          type: integer
+          example: 201
+        name:
+          type: string
+          example: PVC Pipe
+        quantity:
+          type: integer
+          example: 25
+        unit:
+          type: string
+          example: pieces
+        status:
+          type: string
+          enum: [in_stock, out_of_stock]
+          example: in_stock
+
+    InventoryResponse:
+      type: object
+      required:
+        - provider_id
+        - inventory
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        inventory:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+
     Error:
       type: object
       required:
         - error
-        - message
       properties:
         error:
           type: string
-          example: "USER_NOT_FOUND"
-        message:
-          type: string
-          example: "No user exists with the specified userId."
+          example: Provider not found

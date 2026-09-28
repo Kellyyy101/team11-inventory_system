@@ -1,199 +1,278 @@
-const express = require('express');
-const cors = require('cors');
-const db = require('./db');
+const express = require("express");
+const { initializeDatabase, getPool } = require("./db");
 
 const app = express();
-app.use(cors());
+const PORT = Number(process.env.PORT || 3000);
+
 app.use(express.json());
 
-// Helper: Standard 404 response
-const sendNotFound = (res) => {
-  return res.status(404).json({
-    error: 'USER_NOT_FOUND',
-    message: 'No user exists with the specified userId.'
-  });
-};
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
 
-// Helper: Response schema mapping
-const mapUserSchema = (user) => {
-  let mappedRole = 'student';
-  if (user.role === 'owner' || user.role === 'admin' || user.role === 'administrator') {
-    mappedRole = 'administrator';
-  } else if (user.role === 'attendant' || user.role === 'security') {
-    mappedRole = 'security';
-  }
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
 
+function mapProvider(row) {
   return {
-    userId: Number(user.id),
-    name: String(user.username),
-    email: user.email ? String(user.email) : `${String(user.username).toLowerCase()}@strathmore.edu`,
-    role: mappedRole
+    provider_id: row.provider_id,
+    name: row.name,
+    location: row.location,
+    phone: row.phone,
+    description: row.description,
+    status: row.status,
   };
-};
+}
 
-// ==========================================
-// WEEK 6: POST /users (Part B & Part C)
-// ==========================================
-app.post('/users', async (req, res) => {
-  const { name, email, role, phone } = req.body;
+function mapProduct(row) {
+  return {
+    product_id: row.product_id,
+    name: row.name,
+    description: row.description,
+    price: Number(row.price),
+  };
+}
 
-  // --- PART B: VALIDATE FIRST, WRITE SECOND ---
-  
-  // Check 1: Are all required fields present?
-  if (!name || !email || !role) {
-    return res.status(400).json({
-      error: 'INVALID_INPUT',
-      message: 'Missing required fields: name, email, and role are required.'
-    });
-  }
+function mapSale(row) {
+  return {
+    sale_id: row.sale_id,
+    date: row.sale_date instanceof Date
+      ? row.sale_date.toISOString().slice(0, 10)
+      : String(row.sale_date),
+    service: row.service,
+    quantity: row.quantity,
+    amount: Number(row.amount),
+  };
+}
 
-  // Check 2: Are types and values usable?
-  if (typeof name !== 'string' || name.trim().length === 0) {
-    return res.status(400).json({
-      error: 'INVALID_INPUT',
-      message: 'Field "name" must be a non-empty string.'
-    });
-  }
+function mapInventory(row) {
+  return {
+    product_id: row.product_id,
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit,
+    status: row.quantity > 0 ? "in_stock" : "out_of_stock",
+  };
+}
 
-  // Email format check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (typeof email !== 'string' || !emailRegex.test(email)) {
-    return res.status(400).json({
-      error: 'INVALID_INPUT',
-      message: 'Field "email" must be a valid email address.'
-    });
-  }
-
-  // Allowed enums for creation according to contract
-  const allowedRoles = ['student', 'security'];
-  if (!allowedRoles.includes(role)) {
-    return res.status(400).json({
-      error: 'INVALID_INPUT',
-      message: `Field "role" must be one of: ${allowedRoles.join(', ')}.`
-    });
-  }
-
-  // --- PART C: IMPLEMENT STATE CHANGE ---
+// Week 5 — GET provider details
+app.get("/api/providers/:provider_id", async (req, res) => {
   try {
-    // Check if user/email already exists (avoiding duplicate writes / 409 Conflict)
-    const [existing] = await db.query(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
-      [name.trim(), email.trim()]
-    );
+    const providerId = Number(req.params.provider_id);
 
-    if (existing.length > 0) {
-      return res.status(409).json({
-        error: 'USER_ALREADY_EXISTS',
-        message: 'A user with the supplied username or email already exists.'
-      });
+    if (!isPositiveInteger(providerId)) {
+      return res.status(400).json({ error: "provider_id must be a positive integer" });
     }
 
-    // Map contract role to DB role enum ('student'/'security' -> 'attendant' or store as is)
-    const dbRole = role === 'security' ? 'attendant' : 'owner'; // adjust mapping as required by your DB
-
-    const [result] = await db.query(
-      'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-      [name.trim(), '$2y$10$defaultHashForNewUsers', dbRole]
+    const [rows] = await getPool().query(
+      `SELECT provider_id, name, location, phone, description, status
+       FROM providers
+       WHERE provider_id = ?`,
+      [providerId]
     );
 
-    const newUserId = result.insertId;
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Provider not found" });
+    }
 
-    // Fetch newly created record and return 201 Created with schema mapping
-    const [newUsers] = await db.query('SELECT id, username, role FROM users WHERE id = ?', [newUserId]);
-    
-    const responsePayload = {
-      ...mapUserSchema(newUsers[0]),
-      email: email.trim() // Reflect supplied email
-    };
-
-    return res.status(201).json(responsePayload);
-
-  } catch (err) {
-    return res.status(500).json({ error: 'DATABASE_ERROR', message: err.message });
+    return res.status(200).json(mapProvider(rows[0]));
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// ==========================================
-// WEEK 5: GET ENDPOINTS
-// ==========================================
+// Week 5 — GET provider products/services
+app.get("/api/products", async (req, res) => {
+  try {
+    const providerId = Number(req.query.provider_id);
 
-app.get('/users', async (req, res) => {
-  const { search } = req.query;
-
-  if (search !== undefined) {
-    if (typeof search !== 'string' || search.trim().length < 2) {
+    if (!isPositiveInteger(providerId)) {
       return res.status(400).json({
-        error: 'INVALID_SEARCH_QUERY',
-        message: 'Search query must be at least 2 characters long.'
+        error: "provider_id query parameter must be a positive integer",
       });
     }
 
-    try {
-      const [rows] = await db.query(
-        'SELECT id, username, role FROM users WHERE username LIKE ?',
-        [`%${search.trim()}%`]
-      );
+    const [providerRows] = await getPool().query(
+      "SELECT provider_id FROM providers WHERE provider_id = ?",
+      [providerId]
+    );
 
-      const mappedUsers = rows.map(mapUserSchema);
-      return res.status(200).json({ users: mappedUsers, count: mappedUsers.length });
-    } catch (err) {
-      return res.status(500).json({ error: 'DATABASE_ERROR', message: err.message });
+    if (providerRows.length === 0) {
+      return res.status(404).json({ error: "Provider not found" });
     }
-  }
 
-  return sendNotFound(res);
-});
+    const [rows] = await getPool().query(
+      `SELECT product_id, name, description, price
+       FROM products
+       WHERE provider_id = ?
+       ORDER BY product_id`,
+      [providerId]
+    );
 
-app.get('/users/:userId/verification', async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
-  try {
-    const [rows] = await db.query('SELECT id FROM users WHERE id = ?', [userId]);
-    if (rows.length === 0) return sendNotFound(res);
-    return res.status(200).json({ userId: Number(rows[0].id), verified: true, verificationStatus: 'verified' });
-  } catch (err) {
-    return res.status(500).json({ error: 'DATABASE_ERROR', message: err.message });
-  }
-});
-
-app.get('/users/:userId/role', async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
-  try {
-    const [rows] = await db.query('SELECT id, username, role FROM users WHERE id = ?', [userId]);
-    if (rows.length === 0) return sendNotFound(res);
-    const mapped = mapUserSchema(rows[0]);
-    return res.status(200).json({ userId: mapped.userId, role: mapped.role });
-  } catch (err) {
-    return res.status(500).json({ error: 'DATABASE_ERROR', message: err.message });
-  }
-});
-
-app.get('/users/:userId/contact', async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
-  try {
-    const [rows] = await db.query('SELECT id, username FROM users WHERE id = ?', [userId]);
-    if (rows.length === 0) return sendNotFound(res);
     return res.status(200).json({
-      userId: Number(rows[0].id),
-      email: `${String(rows[0].username).toLowerCase()}@strathmore.edu`,
-      phone: null
+      provider_id: providerId,
+      products: rows.map(mapProduct),
     });
-  } catch (err) {
-    return res.status(500).json({ error: 'DATABASE_ERROR', message: err.message });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.get('/users/:userId', async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
+// Week 5 — GET provider sales
+app.get("/api/sales", async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, username, role FROM users WHERE id = ?', [userId]);
-    if (rows.length === 0) return sendNotFound(res);
-    return res.status(200).json(mapUserSchema(rows[0]));
-  } catch (err) {
-    return res.status(500).json({ error: 'DATABASE_ERROR', message: err.message });
+    const providerId = Number(req.query.provider_id);
+
+    if (!isPositiveInteger(providerId)) {
+      return res.status(400).json({
+        error: "provider_id query parameter must be a positive integer",
+      });
+    }
+
+    const [providerRows] = await getPool().query(
+      "SELECT provider_id FROM providers WHERE provider_id = ?",
+      [providerId]
+    );
+
+    if (providerRows.length === 0) {
+      return res.status(404).json({ error: "Provider not found" });
+    }
+
+    const [rows] = await getPool().query(
+      `SELECT
+         s.sale_id,
+         s.sale_date,
+         p.name AS service,
+         s.quantity,
+         s.amount
+       FROM sales s
+       LEFT JOIN products p ON p.product_id = s.product_id
+       WHERE s.provider_id = ?
+       ORDER BY s.sale_date DESC, s.sale_id DESC`,
+      [providerId]
+    );
+
+    return res.status(200).json({
+      provider_id: providerId,
+      sales: rows.map(mapSale),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.use((req, res) => sendNotFound(res));
+// Week 5 — GET provider inventory
+app.get("/api/inventory", async (req, res) => {
+  try {
+    const providerId = Number(req.query.provider_id);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+    if (!isPositiveInteger(providerId)) {
+      return res.status(400).json({
+        error: "provider_id query parameter must be a positive integer",
+      });
+    }
+
+    const [providerRows] = await getPool().query(
+      "SELECT provider_id FROM providers WHERE provider_id = ?",
+      [providerId]
+    );
+
+    if (providerRows.length === 0) {
+      return res.status(404).json({ error: "Provider not found" });
+    }
+
+    const [rows] = await getPool().query(
+      `SELECT
+         i.product_id,
+         p.name,
+         i.quantity,
+         i.unit
+       FROM inventory i
+       INNER JOIN products p ON p.product_id = i.product_id
+       WHERE i.provider_id = ?
+       ORDER BY i.product_id`,
+      [providerId]
+    );
+
+    return res.status(200).json({
+      provider_id: providerId,
+      inventory: rows.map(mapInventory),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Week 6 — POST/register provider
+app.post("/api/providers", async (req, res) => {
+  try {
+    const { name, location, phone, description } = req.body;
+
+    // Validation happens BEFORE the database write.
+    if (
+      !isNonEmptyString(name) ||
+      !isNonEmptyString(location) ||
+      !isNonEmptyString(phone) ||
+      !isNonEmptyString(description)
+    ) {
+      return res.status(400).json({
+        error: "name, location, phone and description are required and must be non-empty strings",
+      });
+    }
+
+    const [result] = await getPool().query(
+      `INSERT INTO providers
+       (name, location, phone, description)
+       VALUES (?, ?, ?, ?)`,
+      [
+        name.trim(),
+        location.trim(),
+        phone.trim(),
+        description.trim(),
+      ]
+    );
+
+    const [rows] = await getPool().query(
+      `SELECT provider_id, name, location, phone, description, status
+       FROM providers
+       WHERE provider_id = ?`,
+      [result.insertId]
+    );
+
+    return res.status(201).json({
+      message: "Provider registered successfully",
+      provider: mapProvider(rows[0]),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// JSON parsing errors
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
+    return res.status(400).json({ error: "Invalid JSON request body" });
+  }
+  return next(error);
+});
+
+async function startServer() {
+  try {
+    await initializeDatabase();
+
+    app.listen(PORT, () => {
+      console.log(`QuickFundi/LiteStock API running at http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
