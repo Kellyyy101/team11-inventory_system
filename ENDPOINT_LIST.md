@@ -6,7 +6,7 @@ Victor Amukoye – 220621
 Jayden Mwendo – 220774
 Linet Weru – 222170
 
-Github link: https://github.com/Kellyyy101/-team-11--inventory_system
+Github link: https://github.com/Kellyyy101/team11-inventory_system
 
 | Method | Path | Purpose| Maps to Need |
 | ----- | ----- | ----- | -----|
