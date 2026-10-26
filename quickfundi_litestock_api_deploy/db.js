@@ -1,12 +1,17 @@
 const mysql = require("mysql2/promise");
 
-const DB_NAME = "litestock_api";
+
+const DB_NAME = process.env.DB_NAME || "litestock_api";
 
 const dbConfig = {
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "",
   port: Number(process.env.DB_PORT || 3306),
+  database: DB_NAME,
+  ssl: process.env.DB_SSL_CA
+    ? { ca: process.env.DB_SSL_CA }
+    : undefined,
 };
 
 let pool;
