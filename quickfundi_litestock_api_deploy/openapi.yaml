@@ -1,0 +1,392 @@
+openapi: 3.0.0
+info:
+  title: LiteStock API for QuickFundi
+  version: 1.0.0
+  description: API consumed by QuickFundi to retrieve provider, service, sales and inventory information and register providers.
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+  /api/providers/{provider_id}:
+    get:
+      summary: Get provider details
+      parameters:
+        - name: provider_id
+          in: path
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+              example:
+                provider_id: 15
+                name: John Mwangi
+                location: Nairobi
+                phone: "0712345678"
+                description: Plumbing and general maintenance services
+                status: active
+        '400':
+          description: Invalid provider ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/products:
+    get:
+      summary: Get products or services for a provider
+      parameters:
+        - name: provider_id
+          in: query
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider products/services
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductsResponse'
+              example:
+                provider_id: 15
+                products:
+                  - product_id: 101
+                    name: Pipe Repair
+                    description: Repair of leaking or damaged pipes
+                    price: 1500
+        '400':
+          description: Invalid provider_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/sales:
+    get:
+      summary: Get sales information for a provider
+      parameters:
+        - name: provider_id
+          in: query
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider sales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesResponse'
+              example:
+                provider_id: 15
+                sales:
+                  - sale_id: 501
+                    date: "2026-09-25"
+                    service: Pipe Repair
+                    quantity: 1
+                    amount: 1500
+        '400':
+          description: Invalid provider_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/inventory:
+    get:
+      summary: Get inventory for a provider
+      parameters:
+        - name: provider_id
+          in: query
+          required: true
+          description: Unique provider ID
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+      responses:
+        '200':
+          description: Provider inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryResponse'
+              example:
+                provider_id: 15
+                inventory:
+                  - product_id: 201
+                    name: PVC Pipe
+                    quantity: 25
+                    unit: pieces
+                    status: in_stock
+        '400':
+          description: Invalid provider_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/providers:
+    post:
+      summary: Register a new provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProviderRequest'
+            example:
+              name: John Mwangi
+              location: Nairobi
+              phone: "0712345678"
+              description: Plumbing and general maintenance services
+      responses:
+        '201':
+          description: Provider created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProviderResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Provider:
+      type: object
+      required:
+        - provider_id
+        - name
+        - location
+        - phone
+        - description
+        - status
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        name:
+          type: string
+          example: John Mwangi
+        location:
+          type: string
+          example: Nairobi
+        phone:
+          type: string
+          example: "0712345678"
+        description:
+          type: string
+          example: Plumbing and general maintenance services
+        status:
+          type: string
+          enum: [active, inactive]
+          example: active
+
+    CreateProviderRequest:
+      type: object
+      required:
+        - name
+        - location
+        - phone
+        - description
+      properties:
+        name:
+          type: string
+          example: John Mwangi
+        location:
+          type: string
+          example: Nairobi
+        phone:
+          type: string
+          example: "0712345678"
+        description:
+          type: string
+          example: Plumbing and general maintenance services
+
+    CreateProviderResponse:
+      type: object
+      required:
+        - message
+        - provider
+      properties:
+        message:
+          type: string
+          example: Provider registered successfully
+        provider:
+          $ref: '#/components/schemas/Provider'
+
+    Product:
+      type: object
+      required:
+        - product_id
+        - name
+        - description
+        - price
+      properties:
+        product_id:
+          type: integer
+          example: 101
+        name:
+          type: string
+          example: Pipe Repair
+        description:
+          type: string
+          example: Repair of leaking or damaged pipes
+        price:
+          type: number
+          format: float
+          example: 1500
+
+    ProductsResponse:
+      type: object
+      required:
+        - provider_id
+        - products
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+
+    Sale:
+      type: object
+      required:
+        - sale_id
+        - date
+        - service
+        - quantity
+        - amount
+      properties:
+        sale_id:
+          type: integer
+          example: 501
+        date:
+          type: string
+          format: date
+          example: "2026-09-25"
+        service:
+          type: string
+          example: Pipe Repair
+        quantity:
+          type: integer
+          example: 1
+        amount:
+          type: number
+          format: float
+          example: 1500
+
+    SalesResponse:
+      type: object
+      required:
+        - provider_id
+        - sales
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        sales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sale'
+
+    InventoryItem:
+      type: object
+      required:
+        - product_id
+        - name
+        - quantity
+        - unit
+        - status
+      properties:
+        product_id:
+          type: integer
+          example: 201
+        name:
+          type: string
+          example: PVC Pipe
+        quantity:
+          type: integer
+          example: 25
+        unit:
+          type: string
+          example: pieces
+        status:
+          type: string
+          enum: [in_stock, out_of_stock]
+          example: in_stock
+
+    InventoryResponse:
+      type: object
+      required:
+        - provider_id
+        - inventory
+      properties:
+        provider_id:
+          type: integer
+          example: 15
+        inventory:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Provider not found
