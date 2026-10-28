@@ -4,262 +4,209 @@ const { initializeDatabase, getPool } = require("./db");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const LOW_STOCK_THRESHOLD = 10;
 
 app.use(express.json());
 
-// Week 8: serve the interactive Swagger UI page and its OpenAPI contract.
 app.get("/docs", (req, res) => res.sendFile(path.join(__dirname, "docs.html")));
 app.get("/openapi.yaml", (req, res) => res.type("text/yaml").sendFile(path.join(__dirname, "openapi.yaml")));
 
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
 function isPositiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
+  return /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value));
 }
 
-function mapProvider(row) {
-  return {
-    provider_id: row.provider_id,
-    name: row.name,
-    location: row.location,
-    phone: row.phone,
-    description: row.description,
-    status: row.status,
-  };
+function getOptionalQueryString(value) {
+  if (value === undefined) {
+    return { value: undefined };
+  }
+  if (typeof value !== "string" || value.trim() === "") {
+    return { error: "Query filters must be non-empty strings." };
+  }
+  return { value: value.trim() };
+}
+
+function isValidDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function mapProduct(row) {
   return {
-    product_id: row.product_id,
+    id: row.id,
     name: row.name,
-    description: row.description,
+    category: row.category,
     price: Number(row.price),
+    stock_quantity: row.stock_quantity,
+  };
+}
+
+function mapInventoryItem(row) {
+  let status = "in_stock";
+  if (row.stock_quantity === 0) {
+    status = "out_of_stock";
+  } else if (row.stock_quantity < LOW_STOCK_THRESHOLD) {
+    status = "low_stock";
+  }
+
+  return {
+    product_id: row.id,
+    name: row.name,
+    category: row.category,
+    stock_quantity: row.stock_quantity,
+    status,
   };
 }
 
 function mapSale(row) {
-  return {
-    sale_id: row.sale_id,
-    date: row.sale_date instanceof Date
-      ? row.sale_date.toISOString().slice(0, 10)
-      : String(row.sale_date),
-    service: row.service,
-    quantity: row.quantity,
-    amount: Number(row.amount),
-  };
-}
+  const saleDate = row.sale_date instanceof Date
+    ? row.sale_date.toISOString()
+    : `${String(row.sale_date).replace(" ", "T")}Z`;
 
-function mapInventory(row) {
   return {
+    id: row.id,
     product_id: row.product_id,
-    name: row.name,
-    quantity: row.quantity,
-    unit: row.unit,
-    status: row.quantity > 0 ? "in_stock" : "out_of_stock",
+    product_name: row.product_name,
+    sale_date: saleDate,
+    quantity_sold: row.quantity_sold,
+    total_price: Number(row.total_price),
   };
 }
 
-// Week 5 — GET provider details
-app.get("/api/providers/:provider_id", async (req, res) => {
-  try {
-    const providerId = Number(req.params.provider_id);
-
-    if (!isPositiveInteger(providerId)) {
-      return res.status(400).json({ error: "provider_id must be a positive integer" });
-    }
-
-    const [rows] = await getPool().query(
-      `SELECT provider_id, name, location, phone, description, status
-       FROM providers
-       WHERE provider_id = ?`,
-      [providerId]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Provider not found" });
-    }
-
-    return res.status(200).json(mapProvider(rows[0]));
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Week 5 — GET provider products/services
 app.get("/api/products", async (req, res) => {
+  const search = getOptionalQueryString(req.query.search);
+  const category = getOptionalQueryString(req.query.category);
+
+  if (search.error || category.error) {
+    return res.status(400).json({ error: search.error || category.error });
+  }
+
   try {
-    const providerId = Number(req.query.provider_id);
+    const conditions = [];
+    const parameters = [];
 
-    if (!isPositiveInteger(providerId)) {
-      return res.status(400).json({
-        error: "provider_id query parameter must be a positive integer",
-      });
+    if (search.value !== undefined) {
+      conditions.push("LOWER(name) LIKE LOWER(?)");
+      parameters.push(`%${search.value}%`);
+    }
+    if (category.value !== undefined) {
+      conditions.push("category = ?");
+      parameters.push(category.value);
     }
 
-    const [providerRows] = await getPool().query(
-      "SELECT provider_id FROM providers WHERE provider_id = ?",
-      [providerId]
-    );
-
-    if (providerRows.length === 0) {
-      return res.status(404).json({ error: "Provider not found" });
-    }
-
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const [rows] = await getPool().query(
-      `SELECT product_id, name, description, price
+      `SELECT id, name, category, price, stock_quantity
        FROM products
-       WHERE provider_id = ?
-       ORDER BY product_id`,
-      [providerId]
+       ${where}
+       ORDER BY name, id`,
+      parameters
     );
+    const products = rows.map(mapProduct);
 
-    return res.status(200).json({
-      provider_id: providerId,
-      products: rows.map(mapProduct),
-    });
+    return res.status(200).json({ count: products.length, products });
   } catch (error) {
-    console.error(error);
+    console.error("GET /api/products failed:", error.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Week 5 — GET provider sales
-app.get("/api/sales", async (req, res) => {
+app.get("/api/products/:product_id", async (req, res) => {
+  const { product_id: productId } = req.params;
+  if (!isPositiveInteger(productId)) {
+    return res.status(400).json({ error: "product_id must be a positive integer" });
+  }
+
   try {
-    const providerId = Number(req.query.provider_id);
-
-    if (!isPositiveInteger(providerId)) {
-      return res.status(400).json({
-        error: "provider_id query parameter must be a positive integer",
-      });
-    }
-
-    const [providerRows] = await getPool().query(
-      "SELECT provider_id FROM providers WHERE provider_id = ?",
-      [providerId]
-    );
-
-    if (providerRows.length === 0) {
-      return res.status(404).json({ error: "Provider not found" });
-    }
-
     const [rows] = await getPool().query(
-      `SELECT
-         s.sale_id,
-         s.sale_date,
-         p.name AS service,
-         s.quantity,
-         s.amount
-       FROM sales s
-       LEFT JOIN products p ON p.product_id = s.product_id
-       WHERE s.provider_id = ?
-       ORDER BY s.sale_date DESC, s.sale_id DESC`,
-      [providerId]
+      `SELECT id, name, category, price, stock_quantity
+       FROM products
+       WHERE id = ?`,
+      [Number(productId)]
     );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Product not found" });
+    }
 
-    return res.status(200).json({
-      provider_id: providerId,
-      sales: rows.map(mapSale),
-    });
+    return res.status(200).json(mapProduct(rows[0]));
   } catch (error) {
-    console.error(error);
+    console.error("GET /api/products/:product_id failed:", error.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Week 5 — GET provider inventory
 app.get("/api/inventory", async (req, res) => {
+  const { low_stock: lowStock } = req.query;
+  if (lowStock !== undefined && lowStock !== "true" && lowStock !== "false") {
+    return res.status(400).json({ error: "low_stock must be true or false" });
+  }
+
   try {
-    const providerId = Number(req.query.provider_id);
-
-    if (!isPositiveInteger(providerId)) {
-      return res.status(400).json({
-        error: "provider_id query parameter must be a positive integer",
-      });
-    }
-
-    const [providerRows] = await getPool().query(
-      "SELECT provider_id FROM providers WHERE provider_id = ?",
-      [providerId]
-    );
-
-    if (providerRows.length === 0) {
-      return res.status(404).json({ error: "Provider not found" });
-    }
-
+    const where = lowStock === "true"
+      ? `WHERE stock_quantity < ${LOW_STOCK_THRESHOLD}`
+      : "";
     const [rows] = await getPool().query(
-      `SELECT
-         i.product_id,
-         p.name,
-         i.quantity,
-         i.unit
-       FROM inventory i
-       INNER JOIN products p ON p.product_id = i.product_id
-       WHERE i.provider_id = ?
-       ORDER BY i.product_id`,
-      [providerId]
+      `SELECT id, name, category, stock_quantity
+       FROM products
+       ${where}
+       ORDER BY name, id`
     );
+    const inventory = rows.map(mapInventoryItem);
 
-    return res.status(200).json({
-      provider_id: providerId,
-      inventory: rows.map(mapInventory),
-    });
+    return res.status(200).json({ count: inventory.length, inventory });
   } catch (error) {
-    console.error(error);
+    console.error("GET /api/inventory failed:", error.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Week 6 — POST/register provider
-app.post("/api/providers", async (req, res) => {
-  try {
-    const { name, location, phone, description } = req.body;
+app.get("/api/sales", async (req, res) => {
+  const from = req.query.from;
+  const to = req.query.to;
+  if (
+    (from !== undefined && !isValidDate(from)) ||
+    (to !== undefined && !isValidDate(to))
+  ) {
+    return res.status(400).json({ error: "from and to must be valid YYYY-MM-DD dates" });
+  }
+  if (from && to && from > to) {
+    return res.status(400).json({ error: "from must be on or before to" });
+  }
 
-    // Validation happens BEFORE the database write.
-    if (
-      !isNonEmptyString(name) ||
-      !isNonEmptyString(location) ||
-      !isNonEmptyString(phone) ||
-      !isNonEmptyString(description)
-    ) {
-      return res.status(400).json({
-        error: "name, location, phone and description are required and must be non-empty strings",
-      });
+  try {
+    const conditions = [];
+    const parameters = [];
+
+    if (from) {
+      conditions.push("s.sale_date >= ?");
+      parameters.push(`${from} 00:00:00`);
+    }
+    if (to) {
+      conditions.push("s.sale_date < DATE_ADD(?, INTERVAL 1 DAY)");
+      parameters.push(`${to} 00:00:00`);
     }
 
-    const [result] = await getPool().query(
-      `INSERT INTO providers
-       (name, location, phone, description)
-       VALUES (?, ?, ?, ?)`,
-      [
-        name.trim(),
-        location.trim(),
-        phone.trim(),
-        description.trim(),
-      ]
-    );
-
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const [rows] = await getPool().query(
-      `SELECT provider_id, name, location, phone, description, status
-       FROM providers
-       WHERE provider_id = ?`,
-      [result.insertId]
+      `SELECT s.id, s.product_id, p.name AS product_name, s.sale_date,
+              s.quantity_sold, s.total_price
+       FROM sales s
+       INNER JOIN products p ON p.id = s.product_id
+       ${where}
+       ORDER BY s.sale_date DESC, s.id DESC`,
+      parameters
     );
+    const sales = rows.map(mapSale);
 
-    return res.status(201).json({
-      message: "Provider registered successfully",
-      provider: mapProvider(rows[0]),
-    });
+    return res.status(200).json({ count: sales.length, sales });
   } catch (error) {
-    console.error(error);
+    console.error("GET /api/sales failed:", error.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// JSON parsing errors
 app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
     return res.status(400).json({ error: "Invalid JSON request body" });
@@ -270,12 +217,11 @@ app.use((error, req, res, next) => {
 async function startServer() {
   try {
     await initializeDatabase();
-
     app.listen(PORT, () => {
-      console.log(`QuickFundi/LiteStock API running at http://localhost:${PORT}`);
+      console.log(`LiteStock API listening on port ${PORT}`);
     });
   } catch (error) {
-    console.error("Failed to start server:", error.message);
+    console.error("Failed to start LiteStock API:", error.message);
     process.exit(1);
   }
 }

@@ -1,111 +1,148 @@
-const request = require('supertest');
-const { app } = require('../server');
-const { initializeDatabase, getPool, closePool } = require('../db');
+const request = require("supertest");
+const { app } = require("../server");
+const { initializeDatabase, getPool, closePool } = require("../db");
 
-let providerId;
-let createdProviderId;
+let existingProduct;
 
 beforeAll(async () => {
   await initializeDatabase();
-  const [rows] = await getPool().query('SELECT provider_id FROM providers ORDER BY provider_id LIMIT 1');
-  if (!rows.length) throw new Error('Test database has no provider seed data. Start the API once to seed it.');
-  providerId = rows[0].provider_id;
+  const [rows] = await getPool().query(
+    "SELECT id, name, category, price, stock_quantity FROM products ORDER BY id LIMIT 1"
+  );
+  if (!rows.length) {
+    throw new Error("The configured inventory database has no products to test.");
+  }
+  existingProduct = rows[0];
 });
 
 afterAll(async () => {
-  if (createdProviderId) await getPool().query('DELETE FROM providers WHERE provider_id = ?', [createdProviderId]);
   await closePool();
 });
 
-describe('GET /api/providers/:provider_id', () => {
-  test('returns a provider matching the documented shape', async () => {
-    const res = await request(app).get(`/api/providers/${providerId}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual(expect.objectContaining({ provider_id: providerId, name: expect.any(String), location: expect.any(String), phone: expect.any(String), description: expect.any(String), status: expect.stringMatching(/^(active|inactive)$/) }));
-  });
-  test('rejects a non-numeric ID', async () => {
-    const res = await request(app).get('/api/providers/abc');
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
-  });
-  test('returns 404 for a provider that does not exist', async () => {
-    const res = await request(app).get('/api/providers/2147483000');
-    expect(res.status).toBe(404); expect(res.body.error).toBe('Provider not found');
-  });
-});
+describe("GET /api/products", () => {
+  test("returns products using the LiteStock schema", async () => {
+    const response = await request(app).get("/api/products");
 
-describe('GET /api/products', () => {
-  test('returns products as an array with contract fields', async () => {
-    const res = await request(app).get(`/api/products?provider_id=${providerId}`);
-    expect(res.status).toBe(200); expect(res.body.provider_id).toBe(providerId); expect(Array.isArray(res.body.products)).toBe(true);
-    if (res.body.products.length) expect(res.body.products[0]).toEqual(expect.objectContaining({ product_id: expect.any(Number), name: expect.any(String), description: expect.any(String), price: expect.any(Number) }));
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBeGreaterThan(0);
+    const firstProduct = response.body.products[0];
+    expect(firstProduct).toEqual(expect.objectContaining({
+      id: expect.any(Number),
+      name: expect.any(String),
+      price: expect.any(Number),
+      stock_quantity: expect.any(Number),
+    }));
+    expect(firstProduct.category === null || typeof firstProduct.category === "string").toBe(true);
+    expect(response.body.products[0]).not.toHaveProperty("provider_id");
   });
-  test('rejects missing provider_id', async () => {
-    const res = await request(app).get('/api/products');
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
-  });
-  test('returns 404 for unknown provider', async () => {
-    const res = await request(app).get('/api/products?provider_id=2147483000');
-    expect(res.status).toBe(404); expect(res.body.error).toBe('Provider not found');
-  });
-});
 
-describe('GET /api/sales', () => {
-  test('returns sales as an array with contract fields', async () => {
-    const res = await request(app).get(`/api/sales?provider_id=${providerId}`);
-    expect(res.status).toBe(200); expect(res.body.provider_id).toBe(providerId); expect(Array.isArray(res.body.sales)).toBe(true);
-    if (res.body.sales.length) {
-      expect(res.body.sales[0]).toEqual(expect.objectContaining({ sale_id: expect.any(Number), date: expect.any(String), service: expect.any(String), quantity: expect.any(Number), amount: expect.any(Number) }));
-      expect(res.body.sales[0].date).toMatch(/^\d{4}-\d{2}-\d{2}/);
+  test("supports name and category filters", async () => {
+    const nameResponse = await request(app)
+      .get("/api/products")
+      .query({ search: existingProduct.name });
+    expect(nameResponse.status).toBe(200);
+    expect(nameResponse.body.products.some((product) => product.id === existingProduct.id)).toBe(true);
+
+    if (existingProduct.category) {
+      const categoryResponse = await request(app)
+        .get("/api/products")
+        .query({ category: existingProduct.category });
+      expect(categoryResponse.status).toBe(200);
+      expect(categoryResponse.body.products.every(
+        (product) => product.category === existingProduct.category
+      )).toBe(true);
     }
   });
-  test('rejects a non-positive provider_id', async () => {
-    const res = await request(app).get('/api/sales?provider_id=0');
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
-  });
-  test('returns 404 for unknown provider', async () => {
-    const res = await request(app).get('/api/sales?provider_id=2147483000');
-    expect(res.status).toBe(404); expect(res.body.error).toBe('Provider not found');
+
+  test("rejects empty filters", async () => {
+    const response = await request(app).get("/api/products?search=%20");
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty("error");
   });
 });
 
-describe('GET /api/inventory', () => {
-  test('returns inventory as an array with contract fields', async () => {
-    const res = await request(app).get(`/api/inventory?provider_id=${providerId}`);
-    expect(res.status).toBe(200); expect(res.body.provider_id).toBe(providerId); expect(Array.isArray(res.body.inventory)).toBe(true);
-    if (res.body.inventory.length) expect(res.body.inventory[0]).toEqual(expect.objectContaining({ product_id: expect.any(Number), name: expect.any(String), quantity: expect.any(Number), unit: expect.any(String), status: expect.stringMatching(/^(in_stock|out_of_stock)$/) }));
+describe("GET /api/products/:product_id", () => {
+  test("returns a product by LiteStock product ID", async () => {
+    const response = await request(app).get(`/api/products/${existingProduct.id}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(expect.objectContaining({
+      id: existingProduct.id,
+      name: existingProduct.name,
+      price: Number(existingProduct.price),
+      stock_quantity: existingProduct.stock_quantity,
+    }));
   });
-  test('rejects invalid provider_id', async () => {
-    const res = await request(app).get('/api/inventory?provider_id=-1');
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
-  });
-  test('returns 404 for unknown provider', async () => {
-    const res = await request(app).get('/api/inventory?provider_id=2147483000');
-    expect(res.status).toBe(404); expect(res.body.error).toBe('Provider not found');
+
+  test("rejects invalid IDs and returns 404 for missing products", async () => {
+    const invalidResponse = await request(app).get("/api/products/abc");
+    expect(invalidResponse.status).toBe(400);
+
+    const missingResponse = await request(app).get("/api/products/2147483000");
+    expect(missingResponse.status).toBe(404);
+    expect(missingResponse.body.error).toBe("Product not found");
   });
 });
 
-describe('POST /api/providers', () => {
-  test('creates a provider and returns the created record that can be fetched again', async () => {
-    const res = await request(app).post('/api/providers').send({ name: 'Jest Test Provider', location: 'Nairobi', phone: '0700000011', description: 'Automated test provider' });
-    expect(res.status).toBe(201); expect(res.body.message).toBe('Provider registered successfully');
-    expect(res.body.provider).toEqual(expect.objectContaining({ provider_id: expect.any(Number), name: 'Jest Test Provider', location: 'Nairobi', phone: '0700000011', description: 'Automated test provider', status: 'active' }));
-    createdProviderId = res.body.provider.provider_id;
-    const verify = await request(app).get(`/api/providers/${createdProviderId}`);
-    expect(verify.status).toBe(200); expect(verify.body.name).toBe('Jest Test Provider');
+describe("GET /api/inventory", () => {
+  test("returns stock quantities and statuses", async () => {
+    const response = await request(app).get("/api/inventory");
+
+    expect(response.status).toBe(200);
+    expect(response.body.inventory).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        product_id: existingProduct.id,
+        stock_quantity: expect.any(Number),
+        status: expect.stringMatching(/^(out_of_stock|low_stock|in_stock)$/),
+      }),
+    ]));
   });
-  test('rejects missing required fields and does not create a row', async () => {
-    const [before] = await getPool().query("SELECT COUNT(*) AS total FROM providers WHERE name = 'Invalid Jest Provider'");
-    const res = await request(app).post('/api/providers').send({ name: 'Invalid Jest Provider' });
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
-    const [after] = await getPool().query("SELECT COUNT(*) AS total FROM providers WHERE name = 'Invalid Jest Provider'");
-    expect(Number(after[0].total)).toBe(Number(before[0].total));
+
+  test("filters low-stock products and rejects invalid filter values", async () => {
+    const response = await request(app).get("/api/inventory?low_stock=true");
+    expect(response.status).toBe(200);
+    expect(response.body.inventory.every((item) => item.stock_quantity < 10)).toBe(true);
+
+    const invalidResponse = await request(app).get("/api/inventory?low_stock=yes");
+    expect(invalidResponse.status).toBe(400);
   });
-  test('rejects wrong field types', async () => {
-    const res = await request(app).post('/api/providers').send({ name: 123, location: 'Nairobi', phone: '0712345678', description: 'Test' });
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
+});
+
+describe("GET /api/sales", () => {
+  test("returns sales without internal user fields", async () => {
+    const response = await request(app).get("/api/sales");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty("count", response.body.sales.length);
+    if (response.body.sales.length) {
+      expect(response.body.sales[0]).toEqual(expect.objectContaining({
+        id: expect.any(Number),
+        product_id: expect.any(Number),
+        product_name: expect.any(String),
+        sale_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        quantity_sold: expect.any(Number),
+        total_price: expect.any(Number),
+      }));
+      expect(response.body.sales[0]).not.toHaveProperty("user_id");
+      expect(response.body.sales[0]).not.toHaveProperty("username");
+    }
   });
-  test('rejects an empty string', async () => {
-    const res = await request(app).post('/api/providers').send({ name: '   ', location: 'Nairobi', phone: '0712345678', description: 'Test' });
-    expect(res.status).toBe(400); expect(res.body).toHaveProperty('error');
+
+  test("validates date filters and applies an inclusive date range", async () => {
+    const filteredResponse = await request(app)
+      .get("/api/sales")
+      .query({ from: "2026-01-01", to: "2026-12-31" });
+    expect(filteredResponse.status).toBe(200);
+    expect(filteredResponse.body.sales.every(
+      (sale) => sale.sale_date >= "2026-01-01" && sale.sale_date < "2027-01-01"
+    )).toBe(true);
+
+    const invalidDateResponse = await request(app).get("/api/sales?from=2026-02-30");
+    expect(invalidDateResponse.status).toBe(400);
+
+    const reversedRangeResponse = await request(app)
+      .get("/api/sales")
+      .query({ from: "2026-12-31", to: "2026-01-01" });
+    expect(reversedRangeResponse.status).toBe(400);
   });
 });
