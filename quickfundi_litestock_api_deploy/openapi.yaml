@@ -5,8 +5,8 @@ info:
   description: Read-only API for QuickFundi to retrieve product, stock, and sales data from LiteStock's inventory_db.
 
 servers:
-  - url: http://localhost:3000
-    description: Local development server
+  - url: /
+    description: Same host serving this API
 
 tags:
   - name: Products
