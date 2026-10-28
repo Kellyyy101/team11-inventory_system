@@ -1,132 +1,113 @@
-Kelly Wambugu – 220001
-Victor Amukoye – 220621
-Jayden Mwendo – 220774
-Linet Weru – 222170
-
-
 openapi: 3.0.0
 info:
-  title: LiteStock API for QuickFundi
-  version: 1.0.0
-  description: API consumed by QuickFundi to retrieve provider, service, sales and inventory information and register providers.
+  title: LiteStock Inventory API for QuickFundi
+  version: 2.0.0
+  description: Read-only API for QuickFundi to retrieve product, stock, and sales data from LiteStock's inventory_db.
 
 servers:
-  - url: http://localhost:3000
+  - url: /
+    description: Same host serving this API
+
+tags:
+  - name: Products
+    description: LiteStock product catalogue
+  - name: Inventory
+    description: Current product stock
+  - name: Sales
+    description: LiteStock sales activity
 
 paths:
-  /api/providers/{provider_id}:
-    get:
-      summary: Get provider details
-      parameters:
-        - name: provider_id
-          in: path
-          required: true
-          description: Unique provider ID
-          schema:
-            type: integer
-            minimum: 1
-            example: 15
-      responses:
-        '200':
-          description: Provider found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Provider'
-              example:
-                provider_id: 15
-                name: John Mwangi
-                location: Nairobi
-                phone: "0712345678"
-                description: Plumbing and general maintenance services
-                status: active
-        '400':
-          description: Invalid provider ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Provider not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /api/products:
     get:
-      summary: Get products or services for a provider
+      tags: [Products]
+      summary: List products
+      description: Returns LiteStock products and their current prices and stock quantities. Search matches product names; category matches the stored category.
       parameters:
-        - name: provider_id
+        - name: search
           in: query
-          required: true
-          description: Unique provider ID
+          required: false
+          description: Case-insensitive substring to match against product names.
           schema:
-            type: integer
-            minimum: 1
-            example: 15
+            type: string
+            minLength: 1
+          example: flour
+        - name: category
+          in: query
+          required: false
+          description: Exact product category to match.
+          schema:
+            type: string
+            minLength: 1
+          example: Grains
       responses:
         '200':
-          description: Provider products/services
+          description: Product list retrieved successfully. An empty products array means no products matched.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductsResponse'
               example:
-                provider_id: 15
+                count: 1
                 products:
-                  - product_id: 101
-                    name: Pipe Repair
-                    description: Repair of leaking or damaged pipes
-                    price: 1500
+                  - id: 12
+                    name: Maize Flour 2kg
+                    category: Grains
+                    price: 180.00
+                    stock_quantity: 25
         '400':
-          description: Invalid provider_id
+          description: Invalid search or category filter.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '404':
-          description: Provider not found
+        '500':
+          description: Unexpected database or server error.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/sales:
+  /api/products/{product_id}:
     get:
-      summary: Get sales information for a provider
+      tags: [Products]
+      summary: Get a product
+      description: Returns a single LiteStock product by its products.id value.
       parameters:
-        - name: provider_id
-          in: query
+        - name: product_id
+          in: path
           required: true
-          description: Unique provider ID
+          description: Positive integer product ID from LiteStock.
           schema:
             type: integer
             minimum: 1
-            example: 15
+          example: 12
       responses:
         '200':
-          description: Provider sales
+          description: Product found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SalesResponse'
+                $ref: '#/components/schemas/Product'
               example:
-                provider_id: 15
-                sales:
-                  - sale_id: 501
-                    date: "2026-09-25"
-                    service: Pipe Repair
-                    quantity: 1
-                    amount: 1500
+                id: 12
+                name: Maize Flour 2kg
+                category: Grains
+                price: 180.00
+                stock_quantity: 25
         '400':
-          description: Invalid provider_id
+          description: Product ID is not a positive integer.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: Provider not found
+          description: No product has this ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Unexpected database or server error.
           content:
             application/json:
               schema:
@@ -134,73 +115,96 @@ paths:
 
   /api/inventory:
     get:
-      summary: Get inventory for a provider
+      tags: [Inventory]
+      summary: Get current inventory
+      description: Returns stock quantities from products.stock_quantity. Low stock means fewer than 10 units, matching LiteStock's dashboard threshold.
       parameters:
-        - name: provider_id
+        - name: low_stock
           in: query
-          required: true
-          description: Unique provider ID
+          required: false
+          description: When true, return only products with fewer than 10 units. When false or omitted, return all products.
           schema:
-            type: integer
-            minimum: 1
-            example: 15
+            type: boolean
+          example: true
       responses:
         '200':
-          description: Provider inventory
+          description: Inventory retrieved successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventoryResponse'
               example:
-                provider_id: 15
+                count: 2
                 inventory:
-                  - product_id: 201
-                    name: PVC Pipe
-                    quantity: 25
-                    unit: pieces
+                  - product_id: 12
+                    name: Maize Flour 2kg
+                    category: Grains
+                    stock_quantity: 25
                     status: in_stock
+                  - product_id: 18
+                    name: Tea Leaves
+                    category: Beverages
+                    stock_quantity: 0
+                    status: out_of_stock
         '400':
-          description: Invalid provider_id
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Provider not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/providers:
-    post:
-      summary: Register a new provider
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateProviderRequest'
-            example:
-              name: John Mwangi
-              location: Nairobi
-              phone: "0712345678"
-              description: Plumbing and general maintenance services
-      responses:
-        '201':
-          description: Provider created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateProviderResponse'
-        '400':
-          description: Validation error
+          description: The low_stock filter is not a valid boolean.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '500':
-          description: Server error
+          description: Unexpected database or server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/sales:
+    get:
+      tags: [Sales]
+      summary: List sales
+      description: Returns LiteStock sales, optionally filtered by an inclusive date range. Responses intentionally omit cashier and user identifiers.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Include sales on or after this date. Must be used with a YYYY-MM-DD date.
+          schema:
+            type: string
+            format: date
+          example: '2026-10-01'
+        - name: to
+          in: query
+          required: false
+          description: Include sales on or before this date. Must be used with a YYYY-MM-DD date.
+          schema:
+            type: string
+            format: date
+          example: '2026-10-28'
+      responses:
+        '200':
+          description: Sales retrieved successfully. An empty sales array means no sales matched the requested period.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesResponse'
+              example:
+                count: 1
+                sales:
+                  - id: 501
+                    product_id: 12
+                    product_name: Maize Flour 2kg
+                    sale_date: '2026-10-28T11:24:00Z'
+                    quantity_sold: 2
+                    total_price: 360.00
+        '400':
+          description: Invalid date or from is later than to.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Unexpected database or server error.
           content:
             application/json:
               schema:
@@ -208,185 +212,145 @@ paths:
 
 components:
   schemas:
-    Provider:
-      type: object
-      required:
-        - provider_id
-        - name
-        - location
-        - phone
-        - description
-        - status
-      properties:
-        provider_id:
-          type: integer
-          example: 15
-        name:
-          type: string
-          example: John Mwangi
-        location:
-          type: string
-          example: Nairobi
-        phone:
-          type: string
-          example: "0712345678"
-        description:
-          type: string
-          example: Plumbing and general maintenance services
-        status:
-          type: string
-          enum: [active, inactive]
-          example: active
-
-    CreateProviderRequest:
-      type: object
-      required:
-        - name
-        - location
-        - phone
-        - description
-      properties:
-        name:
-          type: string
-          example: John Mwangi
-        location:
-          type: string
-          example: Nairobi
-        phone:
-          type: string
-          example: "0712345678"
-        description:
-          type: string
-          example: Plumbing and general maintenance services
-
-    CreateProviderResponse:
-      type: object
-      required:
-        - message
-        - provider
-      properties:
-        message:
-          type: string
-          example: Provider registered successfully
-        provider:
-          $ref: '#/components/schemas/Provider'
-
     Product:
       type: object
       required:
-        - product_id
+        - id
         - name
-        - description
+        - category
         - price
+        - stock_quantity
       properties:
-        product_id:
+        id:
           type: integer
-          example: 101
+          description: LiteStock products.id.
+          example: 12
         name:
           type: string
-          example: Pipe Repair
-        description:
+          example: Maize Flour 2kg
+        category:
           type: string
-          example: Repair of leaking or damaged pipes
+          nullable: true
+          example: Grains
         price:
           type: number
-          format: float
-          example: 1500
+          format: double
+          minimum: 0
+          multipleOf: 0.01
+          example: 180.00
+        stock_quantity:
+          type: integer
+          minimum: 0
+          example: 25
 
     ProductsResponse:
       type: object
       required:
-        - provider_id
+        - count
         - products
       properties:
-        provider_id:
+        count:
           type: integer
-          example: 15
+          minimum: 0
+          example: 1
         products:
           type: array
           items:
             $ref: '#/components/schemas/Product'
-
-    Sale:
-      type: object
-      required:
-        - sale_id
-        - date
-        - service
-        - quantity
-        - amount
-      properties:
-        sale_id:
-          type: integer
-          example: 501
-        date:
-          type: string
-          format: date
-          example: "2026-09-25"
-        service:
-          type: string
-          example: Pipe Repair
-        quantity:
-          type: integer
-          example: 1
-        amount:
-          type: number
-          format: float
-          example: 1500
-
-    SalesResponse:
-      type: object
-      required:
-        - provider_id
-        - sales
-      properties:
-        provider_id:
-          type: integer
-          example: 15
-        sales:
-          type: array
-          items:
-            $ref: '#/components/schemas/Sale'
 
     InventoryItem:
       type: object
       required:
         - product_id
         - name
-        - quantity
-        - unit
+        - category
+        - stock_quantity
         - status
       properties:
         product_id:
           type: integer
-          example: 201
+          example: 12
         name:
           type: string
-          example: PVC Pipe
-        quantity:
-          type: integer
-          example: 25
-        unit:
+          example: Maize Flour 2kg
+        category:
           type: string
-          example: pieces
+          nullable: true
+          example: Grains
+        stock_quantity:
+          type: integer
+          minimum: 0
+          example: 25
         status:
           type: string
-          enum: [in_stock, out_of_stock]
+          enum: [out_of_stock, low_stock, in_stock]
+          description: out_of_stock is zero units; low_stock is 1-9 units; in_stock is 10 or more units.
           example: in_stock
 
     InventoryResponse:
       type: object
       required:
-        - provider_id
+        - count
         - inventory
       properties:
-        provider_id:
+        count:
           type: integer
-          example: 15
+          minimum: 0
+          example: 2
         inventory:
           type: array
           items:
             $ref: '#/components/schemas/InventoryItem'
+
+    Sale:
+      type: object
+      required:
+        - id
+        - product_id
+        - product_name
+        - sale_date
+        - quantity_sold
+        - total_price
+      properties:
+        id:
+          type: integer
+          description: LiteStock sales.id.
+          example: 501
+        product_id:
+          type: integer
+          example: 12
+        product_name:
+          type: string
+          example: Maize Flour 2kg
+        sale_date:
+          type: string
+          format: date-time
+          example: '2026-10-28T11:24:00Z'
+        quantity_sold:
+          type: integer
+          minimum: 1
+          example: 2
+        total_price:
+          type: number
+          format: double
+          minimum: 0
+          multipleOf: 0.01
+          example: 360.00
+
+    SalesResponse:
+      type: object
+      required:
+        - count
+        - sales
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          example: 1
+        sales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sale'
 
     Error:
       type: object
@@ -395,4 +359,4 @@ components:
       properties:
         error:
           type: string
-          example: Provider not found
+          example: Invalid product_id
