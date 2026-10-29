@@ -37,6 +37,10 @@ if (preg_match('#^(/inventory_system)#', $scriptPath, $m)) {
          class="<?= basename($_SERVER['PHP_SELF']) === 'inventory.php' ? 'active' : '' ?>">
         <span class="nav-icon" style="font-size: 20px;">☰</span> Inventory
       </a>
+      <a href="<?= $base ?>/pages/found_items.php"
+         class="<?= basename($_SERVER['PHP_SELF']) === 'found_items.php' ? 'active' : '' ?>">
+        <span class="nav-icon" style="font-size: 20px;">⌕</span> Found Items
+      </a>
       <a href="<?= $base ?>/pages/sales.php"
          class="<?= basename($_SERVER['PHP_SELF']) === 'sales.php' ? 'active' : '' ?>">
         <span class="nav-icon" style="font-size: 20px;">◈</span> Sales Point
